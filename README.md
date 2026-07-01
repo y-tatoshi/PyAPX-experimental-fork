@@ -7,7 +7,7 @@
 
 # PyAPX - Python Toolkit for Atomic Configuration Pattern Exploration
 
-A toolkit that integrates DFT codes with Bayesian optimization to explore stable atomic configurations in materials <sup>[1]</sup>.
+Unofficial experimental fork of PyAPX. For stable or citable use, please use the official PyAPX repository.
 
 ## Requirements
 
