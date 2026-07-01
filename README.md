@@ -15,6 +15,9 @@ Unofficial experimental fork of PyAPX. For stable or citable use, please use the
 - numpy == 1.26.4
 - pandas == 2.2.3
 - [physbo](https://github.com/issp-center-dev/PHYSBO) == 3.1.0
+- [BoTorch](https://botorch.org/) == 0.10.0
+- [GPyTorch](https://gpytorch.ai/) == 1.11
+- [PyTorch](https://pytorch.org/) >= 1.13.1
 - scikit-learn == 1.6.1
 - scipy == 1.13.1
 
@@ -92,6 +95,45 @@ NUM_RAND_BASIS = 3000    # the number of basis functions
 You can choose from the following acquisition functions: Thompson Sampling (TS), Expected Improvement (EI), and Probability of Improvement (PI). For details, please refer to the [PHYSBO documentation](https://issp-center-dev.github.io/PHYSBO/manual/master/en/index.html).
 
 ```ini
+# settings for botorch
+OPTIMIZER = botorch
+SCORE = EI    # acquisition function: "TS" or "EI"
+BOTORCH_DEVICE = auto    # "auto", "cuda", "cuda:0" or "cpu"
+BOTORCH_DTYPE = float32    # "float32" or "float64"
+BOTORCH_BATCH_SIZE = 65536    # candidates scored per GPU/CPU batch
+BOTORCH_MAXITER = 500    # GP hyperparameter fitting iterations
+BOTORCH_INPUT_TRANSFORM = unit_cube    # "unit_cube", "standardize", or "none"
+BOTORCH_GP_KERNEL = default    # "default", "hamming", "ot", or "hamming_ot"
+BOTORCH_STANDARDIZE_Y = False    # False keeps raw objective values
+BOTORCH_DISCRETE_CHUNK_SIZE = 4096    # row chunk size for Hamming / mixed discrete kernels
+BOTORCH_HAMMING_LENGTHSCALE = 0.2    # initial Hamming-kernel lengthscale
+BOTORCH_OT_LENGTHSCALE = 0.5    # initial optimal-transport-kernel lengthscale
+BOTORCH_OT_ATOM_MISMATCH_PENALTY = 1.0    # extra OT cost for matching different atom types
+BOTORCH_OT_SINKHORN_EPSILON = 0.05    # entropic regularization for Sinkhorn OT
+BOTORCH_OT_SINKHORN_ITERATIONS = 30    # Sinkhorn update count
+BOTORCH_OT_CHUNK_SIZE = 1024    # row chunk size for OT distance evaluation
+BOTORCH_USE_LOCAL_ENV = False    # add NA / NAmod site-wise descriptors to discrete kernels
+BOTORCH_LOCAL_ENV_TYPE = NA    # "NA" or "NAmod"
+BOTORCH_ENV_DISTANCE = l1    # "l1" or "l2" descriptor distance
+BOTORCH_ENV_LENGTHSCALE = 0.2    # Hamming local-env kernel lengthscale
+BOTORCH_OT_ENV_MISMATCH_PENALTY = 1.0    # OT cost weight for descriptor mismatch
+BOTORCH_LOCAL_ENV_CACHE = local_env_candidates.pkl
+BOTORCH_SA_SCREENING = False    # use simulated annealing to pre-screen candidates
+BOTORCH_SA_SCORE = EI    # "EI" or "TS" for screening
+BOTORCH_SA_INITIAL_POOL_SIZE = 65536    # random candidates scored before SA
+BOTORCH_SA_CHAINS = 1024    # parallel SA chains
+BOTORCH_SA_STEPS = 500    # annealing steps per chain
+BOTORCH_SA_EVAL_BATCH_SIZE = 4096    # scoring batch size during SA
+BOTORCH_SA_INITIAL_TEMPERATURE = 1.0
+BOTORCH_SA_FINAL_TEMPERATURE = 0.01
+BOTORCH_SA_RANDOM_FRACTION = 0.05    # probability of a global random proposal
+BOTORCH_SA_SWAP_NEIGHBORS = True    # use composition-preserving site swaps
+#BOTORCH_XI = 0.0    # improvement margin for EI
+```
+
+When `OPTIMIZER = botorch`, PyAPX fits a BoTorch/GPyTorch Gaussian process and scores the discrete candidate list in batches on the selected PyTorch device. Use a CUDA-enabled PyTorch installation if `BOTORCH_DEVICE = auto` or `cuda` should run on an NVIDIA GPU. `BOTORCH_GP_KERNEL = default` uses BoTorch's `SingleTaskGP` with encoded/PCA features. `BOTORCH_GP_KERNEL = hamming`, `ot`, and `hamming_ot` consume the raw atomic labels from `candidates.csv` instead of encoded/PCA features by default. Set `BOTORCH_USE_LOCAL_ENV = True` to augment those discrete kernels with site-wise `NA` or `NAmod` local environment descriptors; this requires `NEIGHBOR_SITES` and creates `local_env_candidates.pkl` automatically. The cache also stores inspection metadata such as `candidate_ids`, `site_columns`, `weights`, and `X_site_labels`; `WEIGHT` is recorded there but is not included in the kernel input. The optimal-transport kernel uses normalized shortest-path distances from `NEIGHBOR_SITES` and a Sinkhorn approximation; `hamming_ot` adds both discrete kernels. `BOTORCH_SA_SCREENING = True` evaluates a large random pool and then runs multi-chain simulated annealing over uncalculated candidates, using the selected acquisition score as a cheap surrogate before returning one structure ID for expensive evaluation. The original `OPTIMIZER = physbo` path is unchanged.
+
+```ini
 # settings for "NA", "NAmod"
 NEIGHBOR_SITES
 10   12   18    # site_1's neighbors are site_10, site_12 and site_18
@@ -102,7 +144,7 @@ NEIGHBOR_SITES
       .
 ```
 
-When using NA or NAmod encoding, list the neighboring sites in order from site_1 to define the site network.
+When using NA or NAmod encoding, or `BOTORCH_USE_LOCAL_ENV = True`, list the neighboring sites in order from site_1 to define the site network.
 
 In `qe_template.in`, users need to include atomic coordinates in the [Quantum ESPRESSO input file](https://www.quantum-espresso.org/Doc/INPUT_PW.html) as follows:
 
